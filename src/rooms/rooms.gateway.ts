@@ -12,6 +12,8 @@ export class RoomsGateway {
   @WebSocketServer()
   server: Server;
 
+  private userRooms: Map<string, { roomId: string; userId: string }> = new Map();
+
   // when a user joins a room
   @SubscribeMessage('join-room')
   handleJoinRoom(
@@ -19,31 +21,51 @@ export class RoomsGateway {
     @ConnectedSocket() client: Socket,
   ) {
     client.join(data.roomId);
+
+    // store mapping so we know which user is in which room
+    this.userRooms.set(client.id, data);
+
+    // notify others in the room
     client.to(data.roomId).emit('user-joined', data.userId);
   }
 
   // handle WebRTC signaling messages
-@SubscribeMessage("signal")
-handleSignal(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
-  if (data.to) {
-    this.server.to(data.to).emit("signal", data);
-  } else {
-    client.to(data.roomId).emit("signal", data);
+  @SubscribeMessage('signal')
+  handleSignal(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    if (data.to) {
+      this.server.to(data.to).emit('signal', data);
+    } else {
+      client.to(data.roomId).emit('signal', data);
+    }
   }
-}
 
-@SubscribeMessage("candidate")
-handleCandidate(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
-  if (data.to) {
-    this.server.to(data.to).emit("candidate", data);
-  } else {
-    client.to(data.roomId).emit("candidate", data);
+  @SubscribeMessage('candidate')
+  handleCandidate(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+    if (data.to) {
+      this.server.to(data.to).emit('candidate', data);
+    } else {
+      client.to(data.roomId).emit('candidate', data);
+    }
   }
-}
 
+  // explicit leave-room
+  @SubscribeMessage('leave-room')
+  handleLeaveRoom(
+    @MessageBody() data: { roomId: string; userId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.leave(data.roomId);
+    this.userRooms.delete(client.id);
+    client.to(data.roomId).emit('user-left', data.userId);
+  }
 
   // when a user disconnects
   handleDisconnect(client: Socket) {
+    const info = this.userRooms.get(client.id);
+    if (info) {
+      client.to(info.roomId).emit('user-left', info.userId);
+      this.userRooms.delete(client.id);
+    }
     console.log(`Client disconnected: ${client.id}`);
   }
 }
