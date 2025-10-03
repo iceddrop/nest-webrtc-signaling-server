@@ -23,18 +23,24 @@ export class RoomsGateway {
   }
 
   // handle WebRTC signaling messages
-  @SubscribeMessage('signal')
-  handleSignal(
-    @MessageBody() data: { roomId: string; userId: string; signal: any },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.to(data.roomId).emit('signal', data);
+@SubscribeMessage("signal")
+handleSignal(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+  if (data.to) {
+    this.server.to(data.to).emit("signal", data);
+  } else {
+    client.to(data.roomId).emit("signal", data);
   }
+}
 
-  @SubscribeMessage('candidate')
-  handleCandidate(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
-    client.to(data.roomId).emit('candidate', data);
+@SubscribeMessage("candidate")
+handleCandidate(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
+  if (data.to) {
+    this.server.to(data.to).emit("candidate", data);
+  } else {
+    client.to(data.roomId).emit("candidate", data);
   }
+}
+
 
   // when a user disconnects
   handleDisconnect(client: Socket) {
